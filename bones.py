@@ -1,11 +1,9 @@
 # bones.py
 
-# see README.md for more dox
-
 import random, sys, getopt
 
 
-PLAY_TO = 1
+PLAY_TO = 61
 
 
 def player_random(whoami, legal_plays, table, tile_counts, scores):
@@ -31,19 +29,29 @@ def new_game(options, player_north, player_east, player_south, player_west):
 
 
 def dump_game(g):
-    print 'score: NS: %d EW: %d' % (g.scores[0], g.scores[1])
-    print 'boneyard: %s' % str(g.boneyard)
-    print 'N: %s' % str(g.hands[0])
-    print 'S: %s' % str(g.hands[1])
-    print 'E: %s' % str(g.hands[2])
-    print 'W: %s' % str(g.hands[3])
-    print 'table: %s' % str(g.table)
+    print 'score: %d %d' % (g.scores[0], g.scores[1])
+    print 'boneyard: %s' % serialize_hand(g.boneyard)
+    print 'table: %s' % serialize_table(g.table)
+    ends = get_ends(g.table)
+    print 'ends: %s' % ' '.join(map(lambda x: '%d%d:%d' % (x[0][0], x[0][1], x[1]), filter(lambda x: x[1] != 0, ends.items())))
+    print 'count: %d' % get_count(ends)
+    print 'N: %s' % serialize_hand(g.hands[0])
+    print 'E: %s' % serialize_hand(g.hands[1])
+    print 'S: %s' % serialize_hand(g.hands[2])
+    print 'W: %s' % serialize_hand(g.hands[3])
+    print 'whose_move: %s' % "NESW"[g.whose_move]
+    print
 
 
 def new_hand(g):
     g.tiles = wash_tiles(new_tiles())
     g.hands = [g.tiles[:5], g.tiles[5:10], g.tiles[10:15], g.tiles[15:20]]
     g.boneyard = g.tiles[20:]
+    g.boneyard.sort(reverse = True)
+    g.hands[0].sort(reverse = True)
+    g.hands[1].sort(reverse = True)
+    g.hands[2].sort(reverse = True)
+    g.hands[3].sort(reverse = True)
     g.table = []
     g.whose_set = 0
     g.successive_knocks = 0
@@ -61,7 +69,6 @@ def play_game(g):
 
 
 def play_move(g):
-
     ends = get_ends(g.table)
     pip_ends = get_pip_ends(ends)
     legal_plays = get_plays(ends, pip_ends, g.hands[g.whose_move])
@@ -76,11 +83,11 @@ def play_move(g):
                 east_points = sum(map(lambda x: x[0] + x[1], g.hands[1]))
                 south_points = sum(map(lambda x: x[0] + x[1], g.hands[2]))
                 west_points = sum(map(lambda x: x[0] + x[1], g.hands[3]))
-                if (north_points < east_points and north_points < west_points) \
+                if (north_points < east_points and north_points < west_points) or \
                    (south_points < east_points and south_points < west_points):
-                    g.score[0] += east_points + west_points
+                    g.scores[0] += east_points + west_points
                 else:
-                    g.score[1] += north_points + south_points
+                    g.scores[1] += north_points + south_points
                 return True
         return False
 
@@ -107,7 +114,7 @@ def play_move(g):
             scorer = 1
         points = sum(map(lambda x: x[0] + x[1], g.hands[player_points[0]])) + \
                  sum(map(lambda x: x[0] + x[1], g.hands[player_points[1]]))
-        g.scores[scorer] += points
+        g.scores[scorer] += points // 5
         return True
     return False
 
@@ -118,8 +125,8 @@ def play_hand(g):
     if 4 == g.whose_set:
         g.whose_set = 0
     while 1:
-        dump_game(g)
         hand_over = play_move(g)
+        dump_game(g)
         if hand_over:
             break
         g.whose_move += 1
@@ -152,9 +159,9 @@ def serialize_table(table):
     for i in table:
         a, b = i
         if b == None:
-            s.append('%d%dxx' % (a[0], a[1]))
+            s.append('xx|%d%d' % (a[0], a[1]))
         else:
-            s.append('%d%d%d%d' % (a[0], a[1], b[0], b[1]))
+            s.append('%d%d|%d%d' % (b[0], b[1], a[0], a[1]))
     return ' '.join(s)
 
 
@@ -261,6 +268,12 @@ def render(table):
                 tiles[a] = [b_loc[0] + (4 * x_dir[b_loc[2]]), b_loc[1] + (4 * y_dir[b_loc[2]]), b_loc[2], 0]
             tiles[b][3] += 1
     return tiles
+
+
+def render_ascii(table):
+    tiles = render(table)
+    # TODO: 
+    return None
 
 
 def get_ends(table):
@@ -431,11 +444,19 @@ def main(argv):
         plays = get_plays(ends, pip_ends, hand)
         print plays
 
-
     elif 'test_game' == c:
+        random.seed(argv[1])
         f = lambda w, l, t, c, s: player_random(w, l, t, c, s)
         g = new_game({}, f, f, f, f)
         play_game(g)
+
+    elif 'test_games' == c:
+        random.seed(argv[1])
+        n = int(argv[2])
+        f = lambda w, l, t, c, s: player_random(w, l, t, c, s)
+        for i in range(n):
+            g = new_game({}, f, f, f, f)
+            play_game(g)
 
     else:
         print 'i don\'t know how to "%s".' % command
