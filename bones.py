@@ -28,19 +28,27 @@ def new_game(options, player_north, player_east, player_south, player_west):
     return g
 
 
+def dump(s):
+    sys.stdout.write(s)
+
+
 def dump_game(g):
-    print 'score: %d %d' % (g.scores[0], g.scores[1])
-    print 'boneyard: %s' % serialize_hand(g.boneyard)
-    print 'table: %s' % serialize_table(g.table)
+    dump('score: %d %d\n' % (g.scores[0], g.scores[1]))
+    dump('plays: %s\n' % serialize_table(g.table))
     ends = get_ends(g.table)
-    print 'ends: %s' % ' '.join(map(lambda x: '%d%d:%d' % (x[0][0], x[0][1], x[1]), filter(lambda x: x[1] != 0, ends.items())))
-    print 'count: %d' % get_count(ends)
-    print 'N: %s' % serialize_hand(g.hands[0])
-    print 'E: %s' % serialize_hand(g.hands[1])
-    print 'S: %s' % serialize_hand(g.hands[2])
-    print 'W: %s' % serialize_hand(g.hands[3])
-    print 'whose_move: %s' % "NESW"[g.whose_move]
-    print
+    dump('ends: %s\n' % ' '.join(map(lambda x: '%d%d:%d' % (x[0][0], x[0][1], x[1]), filter(lambda x: x[1] != 0, ends.items()))))
+    dump('count: %d\n' % get_count(ends))
+    dump('boneyard: %s\n' % serialize_hand(g.boneyard))
+    dump('N: %s\n' % serialize_hand(g.hands[0]))
+    dump('E: %s\n' % serialize_hand(g.hands[1]))
+    dump('S: %s\n' % serialize_hand(g.hands[2]))
+    dump('W: %s\n' % serialize_hand(g.hands[3]))
+    dump('whose_move: %s\n' % "NESW"[g.whose_move])
+    dump('%s\n' % ('-' * 40))
+    rows = render_table_simple(g.table)
+    for row in rows:
+        dump(serialize_hand(row) + '\n')
+    dump('%s\n' % ('=' * 40))
 
 
 def new_hand(g):
@@ -70,12 +78,11 @@ def play_game(g):
 
 def play_move(g):
     ends = get_ends(g.table)
-    pip_ends = get_pip_ends(ends)
-    legal_plays = get_plays(ends, pip_ends, g.hands[g.whose_move])
+    legal_plays = get_plays(ends, g.hands[g.whose_move])
     if 0 == len(legal_plays):
-        while 2 < len(g.boneyard):
+        while 2 <= len(g.boneyard):
             g.hands[g.whose_move].append(g.boneyard.pop())
-            legal_plays = get_plays(ends, pip_ends, g.hands[g.whose_move])
+            legal_plays = get_plays(ends, g.hands[g.whose_move])
         if 0 == len(legal_plays):
             g.successive_knocks += 1
             if 4 == g.successive_knocks:
@@ -103,7 +110,7 @@ def play_move(g):
             g.hands[g.whose_move] = g.hands[g.whose_move][:i] + g.hands[g.whose_move][i+1:]
             break
     count = get_count(get_ends(g.table))
-    if 0 == count % 5:
+    if (0 < count) and (0 == count % 5):
         g.scores[g.whose_move % 2] += (count // 5)
     if 0 == len(g.hands[g.whose_move]):
         if g.whose_move in (0, 2):
@@ -125,9 +132,10 @@ def play_hand(g):
     if 4 == g.whose_set:
         g.whose_set = 0
     while 1:
-        hand_over = play_move(g)
         dump_game(g)
+        hand_over = play_move(g)
         if hand_over:
+            dump_game(g)
             break
         g.whose_move += 1
         if 4 == g.whose_move:
@@ -165,6 +173,56 @@ def serialize_table(table):
     return ' '.join(s)
 
 
+def render_table_simple(table):
+    rows = []
+    for play in table:
+        if None == play[1]:
+            rows.append([play[0], ])
+            continue
+        found = False
+        for row in rows:
+            if row[0][0] == play[1][0] and row[0][1] == play[1][1]:
+                if play[0][1] == row[0][0]:
+                    row.insert(0, (play[0][0], play[0][1]))
+                else:
+                    row.insert(0, (play[0][1], play[0][0]))
+                found = True
+                break
+            if row[0][0] == play[1][1] and row[0][1] == play[1][0]:
+                if play[0][1] == row[0][0]:
+                    row.insert(0, (play[0][0], play[0][1]))
+                else:
+                    row.insert(0, (play[0][1], play[0][0]))
+                found = True
+                break
+            if row[-1][0] == play[1][0] and row[-1][1] == play[1][1]:
+                if play[0][1] == row[-1][0]:
+                    row.append((play[0][0], play[0][1]))
+                else:
+                    row.append((play[0][1], play[0][0]))
+                found = True
+                break
+            if row[-1][0] == play[1][1] and row[-1][1] == play[1][0]:
+                if play[0][1] == row[-1][0]:
+                    row.append((play[0][1], play[0][0]))
+                else:
+                    row.append((play[0][1], play[0][0]))
+                found = True
+                break
+        if not found:
+            if play[1][0] == play[1][1]:
+                rows.append([])
+                rows[-1].append((play[1][0], play[1][1]))
+                if play[0][0] == play[1][0]:
+                    rows[-1].append((play[0][0], play[0][1]))
+                else:
+                    rows[-1].append((play[0][1], play[0][0]))
+            else:
+                print rows
+                raise Exception('didn\'t expect "%s"' % str(play))
+    return rows
+
+
 def deserialize_hand(s):
     hand = []
     for i in s.split():
@@ -176,6 +234,7 @@ def deserialize_hand(s):
 
 
 def deserialize_table(s):
+    raise NotImplementedError
     ends = {}
     table = []
     for i in s.split():
@@ -251,6 +310,7 @@ def deserialize_table(s):
 
 
 def render(table):
+    raise NotImplementedError
     tiles = {} # center_x, center_y, direction, count_neighbors
     x_dir = [0, 1, 0, -1]
     y_dir = [-1, 0, 1, 0]
@@ -271,6 +331,7 @@ def render(table):
 
 
 def render_ascii(table):
+    raise NotImplementedError
     tiles = render(table)
     # TODO: 
     return None
@@ -298,56 +359,58 @@ def get_ends(table):
         # high on high
         #
         elif a[0] == b[0]:
-            ends[b] &= 2
+            ends[b] &= 14
             ends[a] = 2
 
         # high on low
         #
         elif a[0] == b[1]:
-            ends[b] &= 1
+            ends[b] &= 13
             ends[a] = 2
 
         # low on high
         #
         elif a[1] == b[0]:
-            ends[b] &= 2
-            ends[a] = 2
+            ends[b] &= 14
+            ends[a] = 1
 
         # low on low
         #
         elif a[1] == b[1]:
-            ends[b] &= 1
+            ends[b] &= 13
             ends[a] = 1
+
+    for i, j in ends.items():
+        if 0 == j:
+            del ends[i]
 
     return ends
 
 
-def get_pip_ends(ends):
-    pip_ends = [{}, {}, {}, {}, {}, {}, {}]
-    for end, playable in ends.items():
-        if 0 == playable:
-            continue
-        if end[0] == end[1]:
-            pip_ends[end[0]][end] = playable
-        else:
-            if 1 & playable:
-                pip_ends[end[0]][end] = playable
-            if 2 & playable:
-                pip_ends[end[1]][end] = playable
-    return pip_ends
-
-
-def get_plays(ends, pip_ends, hand):
+def get_plays(ends, hand):
     plays = []
     if 0 == len(ends):
         for i in hand:
             plays.append((i, None))
     else:
         for i in hand:
-            for end, playable in pip_ends[i[0]].items():
-                plays.append((i, end))
-            if i[0] != i[1]:
-                for end, playable in pip_ends[i[1]].items():
+            for end, playable in ends.items():
+
+                # am i trying to play on a double?
+                #
+                if end[0] == end[1]:
+                    if end[0] in (i[0], i[1]):
+                        plays.append((i, end))
+                    continue
+
+                # is high free?
+                #
+                if (playable & 1) and (end[0] in (i[0], i[1])):
+                    plays.append((i, end))
+
+                # is low free?
+                #
+                if (playable & 2) and (end[1] in (i[0], i[1])):
                     plays.append((i, end))
     return plays
 
@@ -425,23 +488,11 @@ def main(argv):
         count = get_count(ends)
         print count
 
-    elif 'get_pip_ends' == c:
-        table = deserialize_table(argv[1])
-        ends = get_ends(table)
-        pip_ends = get_pip_ends(ends)
-        print pip_ends
-
-    elif 'render' == c:
-        table = deserialize_table(argv[1])
-        tiles = render(table)
-        print tiles
-
     elif 'get_plays' == c:
         hand = deserialize_hand(argv[1])
         table = deserialize_table(argv[2])
         ends = get_ends(table)
-        pip_ends = get_pip_ends(ends)
-        plays = get_plays(ends, pip_ends, hand)
+        plays = get_plays(ends, hand)
         print plays
 
     elif 'test_game' == c:
