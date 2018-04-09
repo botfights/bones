@@ -42,31 +42,32 @@ def new_game(options, player_north, player_east, player_south, player_west):
 
 def get_play(g, player_idx, legal_plays):
     tile_counts = map(lambda x: len(g.hands[x]), range(4))
-    play = g.players[player_idx](player_idx, legal_plays, g.table, tile_counts, g.scores)
+    tile_counts.append(len(g.boneyard))
+    play = g.players[player_idx](player_idx, g.hands[player_idx], legal_plays, g.table, tile_counts, g.scores)
     return play
 
 
 def dump(s):
-    sys.stdout.write(s)
+    logging.debug(s)
 
 
 def dump_game(g):
-    dump('score: %d %d\n' % (g.scores[0], g.scores[1]))
-    dump('plays: %s\n' % serialize_table(g.table))
+    dump('score: %d %d' % (g.scores[0], g.scores[1]))
+    dump('plays: %s' % serialize_table(g.table))
     ends = get_ends(g.table)
-    dump('ends: %s\n' % ' '.join(map(lambda x: '%d%d:%d' % (x[0][0], x[0][1], x[1]), ends.items())))
-    dump('count: %d\n' % get_count(ends))
-    dump('boneyard: %s\n' % serialize_hand(g.boneyard))
-    dump('N: %s\n' % serialize_hand(g.hands[0]))
-    dump('E: %s\n' % serialize_hand(g.hands[1]))
-    dump('S: %s\n' % serialize_hand(g.hands[2]))
-    dump('W: %s\n' % serialize_hand(g.hands[3]))
-    dump('whose_move: %s\n' % "NESW"[g.whose_move])
-    dump('%s\n' % ('-' * 40))
+    dump('ends: %s' % ' '.join(map(lambda x: '%d%d:%d' % (x[0][0], x[0][1], x[1]), ends.items())))
+    dump('count: %d' % get_count(ends))
+    dump('boneyard: %s' % serialize_hand(g.boneyard))
+    dump('N: %s' % serialize_hand(g.hands[0]))
+    dump('E: %s' % serialize_hand(g.hands[1]))
+    dump('S: %s' % serialize_hand(g.hands[2]))
+    dump('W: %s' % serialize_hand(g.hands[3]))
+    dump('whose_move: %s' % "NESW"[g.whose_move])
+    dump('%s' % ('-' * 40))
     rows = render_table_simple(g.table)
     for row in rows:
-        dump(serialize_hand(row) + '\n')
-    dump('%s\n' % ('=' * 40))
+        dump(serialize_hand(row))
+    dump('%s' % ('=' * 40))
 
 
 def new_hand(g):
@@ -329,10 +330,14 @@ def get_plays(ends, hand):
 def get_count(ends):
     count = 0
     for end, playable in ends.items():
-        if playable & 1:
-            count += end[0]
-        if playable & 2:
-            count += end[1]
+        if end[0] == end[1]:
+            if playable & 3:
+                count += end[0] + end[1]
+        else:
+            if playable & 1:
+                count += end[0]
+            if playable & 2:
+                count += end[1]
     return count
 
 
@@ -415,7 +420,7 @@ def play_games(options, player_names, seed, n):
 
 
 def main(argv):
-    if 1 == len(argv):
+    if 0 == len(argv):
         print HELP
         sys.exit()
 
@@ -427,6 +432,13 @@ def main(argv):
     elif 'help' == c:
         print HELP
         sys.exit()
+
+    elif 'human' == c:
+        logging.basicConfig(level=logging.INFO, format='%(message)s', stream=sys.stdout)
+        options = {}
+        player_names = ('p_human', 'p_random')
+        seed = int(time.time() * 1000)
+        play_games(options, player_names, seed, 1)
 
     elif 'game' == c:
         logging.basicConfig(level=logging.DEBUG, format='%(message)s', stream=sys.stdout)

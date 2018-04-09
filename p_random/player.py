@@ -3,6 +3,6 @@
 import random
 
 
-def get_play(whoami, legal_plays, table, tile_counts, scores):
+def get_play(whoami, my_hand, legal_plays, table, tile_counts, scores):
     return random.choice(legal_plays)
 
