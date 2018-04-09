@@ -1,19 +1,30 @@
 # bones.py
 
-import random, sys, getopt
+import random, sys, getopt, imp, logging, time
 
 
 PLAY_TO = 61
+HELP = '''\
+bones.py -- botfights harness for dominoes
 
+to play against the computer
 
-def player_random(whoami, legal_plays, table, tile_counts, scores):
-    return random.choice(legal_plays)
+    $ python bones.py human
 
+to play a game between two bots
 
-def get_play(g, player_idx, legal_plays):
-    tile_counts = map(lambda x: len(g.hands[x]), range(4))
-    play = g.players[player_idx](player_idx, legal_plays, g.table, tile_counts, g.scores)
-    return play
+    $ python bones.py game bot1 bot2
+
+to play a round robin tournament
+
+    $ python bones.py tournament 1000 bot1 bot2 bot3 bot4 bot5
+'''
+
+from signal import (signal,
+                    SIGPIPE,
+                    SIG_DFL)
+
+signal(SIGPIPE, SIG_DFL)
 
 
 class Game:
@@ -25,7 +36,14 @@ def new_game(options, player_north, player_east, player_south, player_west):
     g.options = options
     g.players = [player_north, player_east, player_south, player_east]
     g.scores = [0, 0]
+    g.whose_set = 0
     return g
+
+
+def get_play(g, player_idx, legal_plays):
+    tile_counts = map(lambda x: len(g.hands[x]), range(4))
+    play = g.players[player_idx](player_idx, legal_plays, g.table, tile_counts, g.scores)
+    return play
 
 
 def dump(s):
@@ -36,7 +54,7 @@ def dump_game(g):
     dump('score: %d %d\n' % (g.scores[0], g.scores[1]))
     dump('plays: %s\n' % serialize_table(g.table))
     ends = get_ends(g.table)
-    dump('ends: %s\n' % ' '.join(map(lambda x: '%d%d:%d' % (x[0][0], x[0][1], x[1]), filter(lambda x: x[1] != 0, ends.items()))))
+    dump('ends: %s\n' % ' '.join(map(lambda x: '%d%d:%d' % (x[0][0], x[0][1], x[1]), ends.items())))
     dump('count: %d\n' % get_count(ends))
     dump('boneyard: %s\n' % serialize_hand(g.boneyard))
     dump('N: %s\n' % serialize_hand(g.hands[0]))
@@ -61,12 +79,13 @@ def new_hand(g):
     g.hands[2].sort(reverse = True)
     g.hands[3].sort(reverse = True)
     g.table = []
-    g.whose_set = 0
     g.successive_knocks = 0
+    g.whose_move = g.whose_set
     return g
 
 
-def play_game(g):
+def play_game(options, player_north, player_east, player_south, player_west):
+    g = new_game(options, player_north, player_east, player_south, player_west)
     while 1:
         if g.scores[0] >= PLAY_TO:
             return 0
@@ -74,6 +93,9 @@ def play_game(g):
             return 1
         new_hand(g)
         play_hand(g)
+        g.whose_set += 1
+        if 4 == g.whose_set:
+            g.whose_set = 0
 
 
 def play_move(g):
@@ -167,9 +189,9 @@ def serialize_table(table):
     for i in table:
         a, b = i
         if b == None:
-            s.append('xx|%d%d' % (a[0], a[1]))
+            s.append('%d%d|xx' % (a[0], a[1]))
         else:
-            s.append('%d%d|%d%d' % (b[0], b[1], a[0], a[1]))
+            s.append('%d%d|%d%d' % (a[0], a[1], b[0], b[1]))
     return ' '.join(s)
 
 
@@ -180,6 +202,7 @@ def render_table_simple(table):
             rows.append([play[0], ])
             continue
         found = False
+
         for row in rows:
             if row[0][0] == play[1][0] and row[0][1] == play[1][1]:
                 if play[0][1] == row[0][0]:
@@ -196,15 +219,15 @@ def render_table_simple(table):
                 found = True
                 break
             if row[-1][0] == play[1][0] and row[-1][1] == play[1][1]:
-                if play[0][1] == row[-1][0]:
+                if play[0][0] == row[-1][1]:
                     row.append((play[0][0], play[0][1]))
                 else:
                     row.append((play[0][1], play[0][0]))
                 found = True
                 break
             if row[-1][0] == play[1][1] and row[-1][1] == play[1][0]:
-                if play[0][1] == row[-1][0]:
-                    row.append((play[0][1], play[0][0]))
+                if play[0][0] == row[-1][1]:
+                    row.append((play[0][0], play[0][1]))
                 else:
                     row.append((play[0][1], play[0][0]))
                 found = True
@@ -221,120 +244,6 @@ def render_table_simple(table):
                 print rows
                 raise Exception('didn\'t expect "%s"' % str(play))
     return rows
-
-
-def deserialize_hand(s):
-    hand = []
-    for i in s.split():
-        a = (int(i[0]), int(i[1]))
-        if a[0] < a[1]:
-            a = (a[1], a[0])
-        hand.append(a)
-    return hand
-
-
-def deserialize_table(s):
-    raise NotImplementedError
-    ends = {}
-    table = []
-    for i in s.split():
-        a = (int(i[0]), int(i[1]))
-        if a[0] < a[1]:
-            a = (a[1], a[0])
-        b = None
-        if 0 != len(table):
-            b = (int(i[2]), int(i[3]))
-            if b[0] < b[1]:
-                b = (b[1], b[0])
-            legal = False
-            for end, playable in ends.items():
-                if (playable & 1) and end[0] in (a[0], a[1]):
-                    b = end
-                    legal = True
-                    break
-                if (playable & 2) and end[1] in (a[0], a[1]):
-                    b = end
-                    legal = True
-                    break
-                if (playable & 4) and end[0] in (a[0], a[1]):
-                    b = end
-                    legal = True
-                    break
-                if (playable & 8) and end[0] in (a[0], a[1]):
-                    b = end
-                    legal = True
-                    break
-            if not legal:
-                raise Exception('invalid play in deserializing "%s"' % s)
-
-        # first play?
-        #
-        if None == b:
-            ends[a] = 3
-
-        # play on a double?
-        #
-        elif b[0] == b[1]:
-            ends[b] = {3:2, 2:8, 8:4, 4:0}[ends[b]]
-            if a[0] == b[0]:
-                ends[a] = 2
-            else:
-                ends[a] = 1
-
-        # high on high
-        #
-        elif a[0] == b[0]:
-            ends[b] &= 2
-            ends[a] = 2
-
-        # high on low
-        #
-        elif a[0] == b[1]:
-            ends[b] &= 1
-            ends[a] = 2
-
-        # low on high
-        #
-        elif a[1] == b[0]:
-            ends[b] &= 2
-            ends[a] = 2
-
-        # low on low
-        #
-        elif a[1] == b[1]:
-            ends[b] &= 1
-            ends[a] = 1
-
-        table.append((a, b))
-    return table
-
-
-def render(table):
-    raise NotImplementedError
-    tiles = {} # center_x, center_y, direction, count_neighbors
-    x_dir = [0, 1, 0, -1]
-    y_dir = [-1, 0, 1, 0]
-    for i in table:
-        a, b = i
-        if 0 == len(tiles):
-            tiles[a] = [0, 0, EAST, 0]
-        else:
-            b_loc = tiles[b]
-            if b[0] == b[1]:    # single on double
-                pass
-            elif a[0] == a[1]:  # double on single
-                tiles[a] = [b_loc[0] + (3 * x_dir[b_loc[2]]), b_loc[1] + (3 * y_dir[b_loc[2]]), (b_loc[2] + 1) % 4, 0]
-            else:               # single on single
-                tiles[a] = [b_loc[0] + (4 * x_dir[b_loc[2]]), b_loc[1] + (4 * y_dir[b_loc[2]]), b_loc[2], 0]
-            tiles[b][3] += 1
-    return tiles
-
-
-def render_ascii(table):
-    raise NotImplementedError
-    tiles = render(table)
-    # TODO: 
-    return None
 
 
 def get_ends(table):
@@ -393,6 +302,10 @@ def get_plays(ends, hand):
         for i in hand:
             plays.append((i, None))
     else:
+
+        # don't return duplicates (but only need to check singles)
+        #
+        singles = {}
         for i in hand:
             for end, playable in ends.items():
 
@@ -403,115 +316,135 @@ def get_plays(ends, hand):
                         plays.append((i, end))
                     continue
 
-                # is high free?
+                # check singles
                 #
-                if (playable & 1) and (end[0] in (i[0], i[1])):
-                    plays.append((i, end))
-
-                # is low free?
-                #
-                if (playable & 2) and (end[1] in (i[0], i[1])):
-                    plays.append((i, end))
+                if ((playable & 1) and (end[0] in (i[0], i[1]))) or \
+                   ((playable & 2) and (end[1] in (i[0], i[1]))):
+                    if (end, i[0], i[1]) not in singles:
+                        plays.append((i, end))
+                        singles[(end, i[0], i[1])] = 1
     return plays
 
 
 def get_count(ends):
     count = 0
     for end, playable in ends.items():
-        if end[0] == end[1]:
-            if playable & 3:
-                count += 2 * end[0]
-        else:
-            if playable & 1:
-                count += end[0]
-            if playable & 2:
-                count += end[1]
+        if playable & 1:
+            count += end[0]
+        if playable & 2:
+            count += end[1]
     return count
 
 
+def split_playername(playername):
+    parts = playername.split(':')
+    if 1 == len(parts):
+        return (parts[0], parts[0], 'player', 'get_play')
+    if 2 == len(parts):
+        return (parts[0], parts[1], 'player', 'get_play')
+    if 3 == len(parts):
+        return (parts[0], parts[1], parts[2], 'get_play')
+    if 4 == len(parts):
+        return (parts[0], parts[1], parts[2], parts[3])
+    raise Exception('i don\'t know how to parse "%s"' % playername)
+
+
+def make_player(playername, path, modulename, attr):
+    fp = pathname = description = m = None
+    try:
+        fp, pathname, description = imp.find_module(modulename, [path, ])
+    except:
+        logging.warn('caught exception "%s" finding module %s' % (sys.exc_info()[1], modulename))
+
+    try:
+        if fp:
+            m = imp.load_module(playername, fp, pathname, description)
+    except:
+        logging.warn('caught exception "%s" importing %s' % (sys.exc_info()[1], playername))
+    finally:
+        if fp:
+            fp.close()
+
+    if None == m :
+        return None
+
+    f = getattr(m, attr)
+    return f
+
+
+def build_player(s):
+    playername, path, modulename, attr = split_playername(s)
+    p = make_player(playername, path, modulename, attr)
+    return p
+
+
+def play_games(options, player_names, seed, n):
+    players = {}
+    names = {}
+    wins = {}
+    for i in player_names:
+        player_id = chr(ord('A') + len(players))
+        names[player_id] = i
+        logging.info('building player %s (%s) partner #1 ...' % (player_id, i))
+        p1 = build_player(i)
+        logging.info('building player %s (%s) partner #2 ...' % (player_id, i))
+        p2 = build_player(i)
+        players[player_id] = (p1, p2)
+        wins[player_id] = 0
+    for i in range(n):
+        logging.info('playing round #%d of %d ...' % (i, n))
+        for player_a in players.keys():
+            for player_b in players.keys():
+                if player_a == player_b:
+                    continue
+                result1 = play_game(options, players[player_a][0], players[player_b][0], players[player_a][1], players[player_b][1])
+                result2 = play_game(options, players[player_b][0], players[player_a][0], players[player_b][1], players[player_a][1])
+                if result1:
+                    wins[player_a] += 1
+                else:
+                    wins[player_b] += 1
+                if result1:
+                    wins[player_b] += 1
+                else:
+                    wins[player_a] += 1
+    a = []
+    for i in wins.items():
+        a.append((names[i[0]], i[1]))
+    a.sort(key = lambda x: x[1], reverse = True)
+    return a
+
+
 def main(argv):
+    if 1 == len(argv):
+        print HELP
+        sys.exit()
 
     c = argv[0]
 
     if 0:
         pass
 
-    elif 'new_tiles' == c:
-        tiles = new_tiles()
-        print tiles
+    elif 'help' == c:
+        print HELP
+        sys.exit()
 
-    elif 'wash_tiles' == c:
-        tiles = new_tiles()
-        wash_tiles(tiles)
-        print tiles
+    elif 'game' == c:
+        logging.basicConfig(level=logging.DEBUG, format='%(message)s', stream=sys.stdout)
+        options = {}
+        player_names = argv[1:]
+        seed = int(time.time() * 1000)
+        play_games(options, player_names, seed, 1)
 
-    elif 'count_tiles' == c:
-        tiles = new_tiles()
-        print len(tiles)
+    elif 'tournament' == c:
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)-7s %(message)s', stream=sys.stdout)
+        n = int(argv[1])
+        player_names = argv[2:]
+        seed = ''.join(argv)
+        play_games(options, player_names, seed, 1)
 
-    elif 'new_hand' == c:
-        tiles = new_tiles()
-        wash_tiles(tiles)
-        hand = tiles[:5]
-        hand.sort(reverse=True)
-        print serialize_hand(hand)
-
-    elif 'reserialize_hand' == c:
-        hand = deserialize_hand(argv[1])
-        print serialize_hand(hand)
-
-    elif 'new_hands' == c:
-        for i in range(int(argv[1])):
-            tiles = new_tiles()
-            wash_tiles(tiles)
-            hand = tiles[:5]
-            hand.sort(reverse=True)
-            print serialize_hand(hand)
-
-    elif 'deserialize' == c:
-        table = deserialize_table(argv[1])
-        print table
-
-    elif 'reserialize' == c:
-        table = deserialize_table(argv[1])
-        s = serialize_table(table)
-        print s
-
-    elif 'get_ends' == c:
-        table = deserialize_table(argv[1])
-        ends = get_ends(table)
-        print ends
-
-    elif 'get_count' == c:
-        table = deserialize_table(argv[1])
-        ends = get_ends(table)
-        count = get_count(ends)
-        print count
-
-    elif 'get_plays' == c:
-        hand = deserialize_hand(argv[1])
-        table = deserialize_table(argv[2])
-        ends = get_ends(table)
-        plays = get_plays(ends, hand)
-        print plays
-
-    elif 'test_game' == c:
-        random.seed(argv[1])
-        f = lambda w, l, t, c, s: player_random(w, l, t, c, s)
-        g = new_game({}, f, f, f, f)
-        play_game(g)
-
-    elif 'test_games' == c:
-        random.seed(argv[1])
-        n = int(argv[2])
-        f = lambda w, l, t, c, s: player_random(w, l, t, c, s)
-        for i in range(n):
-            g = new_game({}, f, f, f, f)
-            play_game(g)
-
-    else:
-        print 'i don\'t know how to "%s".' % command
-        usage()
+    else :
+        logging.error('i don\'t know how to "%s". look at the source' % c)
+        print HELP
         sys.exit()
 
 
