@@ -353,8 +353,7 @@ def play_games(options, player_names, seed, n):
                 result = play_game(options, players[seats[0]][0], players[seats[1]][0], players[seats[0]][1], players[seats[1]][1])
                 logging.info('%s beat %s.' % (names[seats[result]], names[seats[1 - result]]))
                 wins[seats[result]] += 1
-                for player_id, count in wins.items():
-                    logging.info('WINS\t%s\t%d' % (names[player_id], count))
+                logging.info('BOTFIGHTS\t%s' % ('\t'.join(map(lambda x: '%s:%d' % (names[x], wins[x]), wins.keys()))))
     a = []
     for i in wins.items():
         a.append((names[i[0]], i[1]))
