@@ -63,11 +63,6 @@ def dump_game(g):
     dump('S: %s' % serialize_hand(g.hands[2]))
     dump('W: %s' % serialize_hand(g.hands[3]))
     dump('whose_move: %s' % "NESW"[g.whose_move])
-    dump('%s' % ('-' * 40))
-    rows = render_table_simple(g.table)
-    for row in rows:
-        dump(serialize_hand(row))
-    dump('%s' % ('=' * 40))
 
 
 def new_hand(g):
@@ -194,57 +189,6 @@ def serialize_table(table):
         else:
             s.append('%d%d|%d%d' % (a[0], a[1], b[0], b[1]))
     return ' '.join(s)
-
-
-def render_table_simple(table):
-    rows = []
-    for play in table:
-        if None == play[1]:
-            rows.append([play[0], ])
-            continue
-        found = False
-
-        for row in rows:
-            if row[0][0] == play[1][0] and row[0][1] == play[1][1]:
-                if play[0][1] == row[0][0]:
-                    row.insert(0, (play[0][0], play[0][1]))
-                else:
-                    row.insert(0, (play[0][1], play[0][0]))
-                found = True
-                break
-            if row[0][0] == play[1][1] and row[0][1] == play[1][0]:
-                if play[0][1] == row[0][0]:
-                    row.insert(0, (play[0][0], play[0][1]))
-                else:
-                    row.insert(0, (play[0][1], play[0][0]))
-                found = True
-                break
-            if row[-1][0] == play[1][0] and row[-1][1] == play[1][1]:
-                if play[0][0] == row[-1][1]:
-                    row.append((play[0][0], play[0][1]))
-                else:
-                    row.append((play[0][1], play[0][0]))
-                found = True
-                break
-            if row[-1][0] == play[1][1] and row[-1][1] == play[1][0]:
-                if play[0][0] == row[-1][1]:
-                    row.append((play[0][0], play[0][1]))
-                else:
-                    row.append((play[0][1], play[0][0]))
-                found = True
-                break
-        if not found:
-            if play[1][0] == play[1][1]:
-                rows.append([])
-                rows[-1].append((play[1][0], play[1][1]))
-                if play[0][0] == play[1][0]:
-                    rows[-1].append((play[0][0], play[0][1]))
-                else:
-                    rows[-1].append((play[0][1], play[0][0]))
-            else:
-                print rows
-                raise Exception('didn\'t expect "%s"' % str(play))
-    return rows
 
 
 def get_ends(table):
@@ -397,21 +341,20 @@ def play_games(options, player_names, seed, n):
         players[player_id] = (p1, p2)
         wins[player_id] = 0
     for i in range(n):
-        logging.info('playing round #%d of %d ...' % (i, n))
+        logging.info('playing round #%d of %d ...' % (i + 1, n))
         for player_a in players.keys():
             for player_b in players.keys():
-                if player_a == player_b:
+                if player_a >= player_b:
                     continue
-                result1 = play_game(options, players[player_a][0], players[player_b][0], players[player_a][1], players[player_b][1])
-                result2 = play_game(options, players[player_b][0], players[player_a][0], players[player_b][1], players[player_a][1])
-                if result1:
-                    wins[player_a] += 1
-                else:
-                    wins[player_b] += 1
-                if result1:
-                    wins[player_b] += 1
-                else:
-                    wins[player_a] += 1
+                seats = (player_a, player_b)
+                if 0 == (i % 2):
+                    seats = (player_b, player_a)
+                logging.info('playing game between %s and %s ...' % (names[seats[0]], names[seats[1]]))
+                result = play_game(options, players[seats[0]][0], players[seats[1]][0], players[seats[0]][1], players[seats[1]][1])
+                logging.info('%s beat %s.' % (names[seats[result]], names[seats[1 - result]]))
+                wins[seats[result]] += 1
+                for player_id, count in wins.items():
+                    logging.info('WINS\t%s\t%d' % (names[player_id], count))
     a = []
     for i in wins.items():
         a.append((names[i[0]], i[1]))
@@ -452,7 +395,8 @@ def main(argv):
         n = int(argv[1])
         player_names = argv[2:]
         seed = ''.join(argv)
-        play_games(options, player_names, seed, 1)
+        options = {}
+        play_games(options, player_names, seed, n)
 
     else :
         logging.error('i don\'t know how to "%s". look at the source' % c)
