@@ -108,7 +108,7 @@ def play_games(options, player_names, seed, n):
 
 def main(argv):
     if 0 == len(argv):
-        print HELP
+        print(HELP)
         sys.exit()
 
     c = argv[0]
@@ -117,7 +117,7 @@ def main(argv):
         pass
 
     elif 'help' == c:
-        print HELP
+        print(HELP)
         sys.exit()
 
     elif 'game' == c:
@@ -137,7 +137,7 @@ def main(argv):
 
     else :
         logging.error('i don\'t know how to "%s". look at the source' % c)
-        print HELP
+        print(HELP)
         sys.exit()
 
 

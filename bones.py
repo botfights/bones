@@ -20,7 +20,9 @@ def new_game(options, player_north, player_east, player_south, player_west):
 
 
 def get_play(g, player_idx, legal_plays):
-    tile_counts = map(lambda x: len(g.hands[x]), range(4))
+    tile_counts = []
+    for i in range(4):
+        tile_counts.append(len(g.hands[i]))
     tile_counts.append(len(g.boneyard))
     play = g.players[player_idx](player_idx, g.hands[player_idx], legal_plays, g.table, tile_counts, g.scores)
     return play
@@ -42,6 +44,63 @@ def dump_game(g):
     dump('S: %s' % serialize_hand(g.hands[2]))
     dump('W: %s' % serialize_hand(g.hands[3]))
     dump('whose_move: %s' % "NESW"[g.whose_move])
+
+
+def serialize_hand(hand):
+    s = []
+    for a in hand:
+        s.append('%d%d' % (a[0], a[1]))
+    return ' '.join(s)
+
+
+def render_table_simple(table):
+    rows = []
+    for play in table:
+        if None == play[1]:
+            rows.append([play[0], ])
+            continue
+        found = False
+
+        for row in rows:
+            if row[0][0] == play[1][0] and row[0][1] == play[1][1]:
+                if play[0][1] == row[0][0]:
+                    row.insert(0, (play[0][0], play[0][1]))
+                else:
+                    row.insert(0, (play[0][1], play[0][0]))
+                found = True
+                break
+            if row[0][0] == play[1][1] and row[0][1] == play[1][0]:
+                if play[0][1] == row[0][0]:
+                    row.insert(0, (play[0][0], play[0][1]))
+                else:
+                    row.insert(0, (play[0][1], play[0][0]))
+                found = True
+                break
+            if row[-1][0] == play[1][0] and row[-1][1] == play[1][1]:
+                if play[0][0] == row[-1][1]:
+                    row.append((play[0][0], play[0][1]))
+                else:
+                    row.append((play[0][1], play[0][0]))
+                found = True
+                break
+            if row[-1][0] == play[1][1] and row[-1][1] == play[1][0]:
+                if play[0][0] == row[-1][1]:
+                    row.append((play[0][0], play[0][1]))
+                else:
+                    row.append((play[0][1], play[0][0]))
+                found = True
+                break
+        if not found:
+            if play[1][0] == play[1][1]:
+                rows.append([])
+                rows[-1].append((play[1][0], play[1][1]))
+                if play[0][0] == play[1][0]:
+                    rows[-1].append((play[0][0], play[0][1]))
+                else:
+                    rows[-1].append((play[0][1], play[0][0]))
+            else:
+                raise Exception('didn\'t expect "%s"' % str(play))
+    return rows
 
 
 def new_hand(g):
@@ -70,13 +129,6 @@ def new_tiles():
 def wash_tiles(tiles):
     random.shuffle(tiles)
     return tiles
-
-
-def serialize_hand(hand):
-    s = []
-    for a in hand:
-        s.append('%d%d' % (a[0], a[1]))
-    return ' '.join(s)
 
 
 def serialize_table(table):
@@ -133,8 +185,8 @@ def get_ends(table):
             ends[b] &= 13
             ends[a] = 1
 
-    for i, j in ends.items():
-        if 0 == j:
+    for i in list(ends.keys()):
+        if 0 == ends[i]:
             del ends[i]
 
     return ends
