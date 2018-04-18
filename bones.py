@@ -1,30 +1,9 @@
 # bones.py
 
-import random, sys, getopt, imp, logging, time
+import random, logging
 
 
 PLAY_TO = 61
-HELP = '''\
-bones.py -- botfights harness for dominoes
-
-to play against the computer
-
-    $ python bones.py human
-
-to play a game between two bots
-
-    $ python bones.py game bot1 bot2
-
-to play a round robin tournament
-
-    $ python bones.py tournament 1000 bot1 bot2 bot3 bot4 bot5
-'''
-
-from signal import (signal,
-                    SIGPIPE,
-                    SIG_DFL)
-
-signal(SIGPIPE, SIG_DFL)
 
 
 class Game:
@@ -78,86 +57,6 @@ def new_hand(g):
     g.successive_knocks = 0
     g.whose_move = g.whose_set
     return g
-
-
-def play_game(options, player_north, player_east, player_south, player_west):
-    g = new_game(options, player_north, player_east, player_south, player_west)
-    while 1:
-        if g.scores[0] >= PLAY_TO:
-            return 0
-        if g.scores[1] >= PLAY_TO:
-            return 1
-        new_hand(g)
-        play_hand(g)
-        g.whose_set += 1
-        if 4 == g.whose_set:
-            g.whose_set = 0
-
-
-def play_move(g):
-    ends = get_ends(g.table)
-    legal_plays = get_plays(ends, g.hands[g.whose_move])
-    if 0 == len(legal_plays):
-        while 2 <= len(g.boneyard):
-            g.hands[g.whose_move].append(g.boneyard.pop())
-            legal_plays = get_plays(ends, g.hands[g.whose_move])
-        if 0 == len(legal_plays):
-            g.successive_knocks += 1
-            if 4 == g.successive_knocks:
-                north_points = sum(map(lambda x: x[0] + x[1], g.hands[0]))
-                east_points = sum(map(lambda x: x[0] + x[1], g.hands[1]))
-                south_points = sum(map(lambda x: x[0] + x[1], g.hands[2]))
-                west_points = sum(map(lambda x: x[0] + x[1], g.hands[3]))
-                if (north_points < east_points and north_points < west_points) or \
-                   (south_points < east_points and south_points < west_points):
-                    g.scores[0] += east_points + west_points
-                else:
-                    g.scores[1] += north_points + south_points
-                return True
-        return False
-
-    play = get_play(g, g.whose_move, legal_plays)
-    if play not in legal_plays:
-        play = legal_plays.values()[0]
-
-    g.successive_knocks = 0
-
-    g.table.append(play)
-    for i in range(len(g.hands[g.whose_move])):
-        if g.hands[g.whose_move][i] == play[0]:
-            g.hands[g.whose_move] = g.hands[g.whose_move][:i] + g.hands[g.whose_move][i+1:]
-            break
-    count = get_count(get_ends(g.table))
-    if (0 < count) and (0 == count % 5):
-        g.scores[g.whose_move % 2] += (count // 5)
-    if 0 == len(g.hands[g.whose_move]):
-        if g.whose_move in (0, 2):
-            player_points = (1, 3)
-            scorer = 0
-        else:
-            player_points = (0, 2)
-            scorer = 1
-        points = sum(map(lambda x: x[0] + x[1], g.hands[player_points[0]])) + \
-                 sum(map(lambda x: x[0] + x[1], g.hands[player_points[1]]))
-        g.scores[scorer] += points // 5
-        return True
-    return False
-
-
-def play_hand(g):
-    g.whose_move = g.whose_set
-    g.whose_set += 1
-    if 4 == g.whose_set:
-        g.whose_set = 0
-    while 1:
-        dump_game(g)
-        hand_over = play_move(g)
-        if hand_over:
-            dump_game(g)
-            break
-        g.whose_move += 1
-        if 4 == g.whose_move:
-            g.whose_move = 0
 
 
 def new_tiles():
@@ -285,123 +184,82 @@ def get_count(ends):
     return count
 
 
-def split_playername(playername):
-    parts = playername.split(':')
-    if 1 == len(parts):
-        return (parts[0], parts[0], 'player', 'get_play')
-    if 2 == len(parts):
-        return (parts[0], parts[1], 'player', 'get_play')
-    if 3 == len(parts):
-        return (parts[0], parts[1], parts[2], 'get_play')
-    if 4 == len(parts):
-        return (parts[0], parts[1], parts[2], parts[3])
-    raise Exception('i don\'t know how to parse "%s"' % playername)
+def play_hand(g):
+    g.whose_move = g.whose_set
+    g.whose_set += 1
+    if 4 == g.whose_set:
+        g.whose_set = 0
+    while 1:
+        dump_game(g)
+        hand_over = play_move(g)
+        if hand_over:
+            dump_game(g)
+            break
+        g.whose_move += 1
+        if 4 == g.whose_move:
+            g.whose_move = 0
 
 
-def make_player(playername, path, modulename, attr):
-    fp = pathname = description = m = None
-    try:
-        fp, pathname, description = imp.find_module(modulename, [path, ])
-    except:
-        logging.warn('caught exception "%s" finding module %s' % (sys.exc_info()[1], modulename))
+def play_move(g):
+    ends = get_ends(g.table)
+    legal_plays = get_plays(ends, g.hands[g.whose_move])
+    if 0 == len(legal_plays):
+        while 2 <= len(g.boneyard):
+            g.hands[g.whose_move].append(g.boneyard.pop())
+            legal_plays = get_plays(ends, g.hands[g.whose_move])
+        if 0 == len(legal_plays):
+            g.successive_knocks += 1
+            if 4 == g.successive_knocks:
+                north_points = sum(map(lambda x: x[0] + x[1], g.hands[0]))
+                east_points = sum(map(lambda x: x[0] + x[1], g.hands[1]))
+                south_points = sum(map(lambda x: x[0] + x[1], g.hands[2]))
+                west_points = sum(map(lambda x: x[0] + x[1], g.hands[3]))
+                if (north_points < east_points and north_points < west_points) or \
+                   (south_points < east_points and south_points < west_points):
+                    g.scores[0] += east_points + west_points
+                else:
+                    g.scores[1] += north_points + south_points
+                return True
+        return False
 
-    try:
-        if fp:
-            m = imp.load_module(playername, fp, pathname, description)
-    except:
-        logging.warn('caught exception "%s" importing %s' % (sys.exc_info()[1], playername))
-    finally:
-        if fp:
-            fp.close()
+    play = get_play(g, g.whose_move, legal_plays)
+    if play not in legal_plays:
+        play = legal_plays.values()[0]
 
-    if None == m :
-        return None
+    g.successive_knocks = 0
 
-    f = getattr(m, attr)
-    return f
-
-
-def build_player(s):
-    playername, path, modulename, attr = split_playername(s)
-    p = make_player(playername, path, modulename, attr)
-    return p
-
-
-def play_games(options, player_names, seed, n):
-    players = {}
-    names = {}
-    wins = {}
-    for i in player_names:
-        player_id = chr(ord('A') + len(players))
-        names[player_id] = i
-        logging.info('building player %s (%s) partner #1 ...' % (player_id, i))
-        p1 = build_player(i)
-        logging.info('building player %s (%s) partner #2 ...' % (player_id, i))
-        p2 = build_player(i)
-        players[player_id] = (p1, p2)
-        wins[player_id] = 0
-    for i in range(n):
-        logging.info('playing round #%d of %d ...' % (i + 1, n))
-        for player_a in players.keys():
-            for player_b in players.keys():
-                if player_a >= player_b:
-                    continue
-                seats = (player_a, player_b)
-                if 0 == (i % 2):
-                    seats = (player_b, player_a)
-                logging.info('playing game between %s and %s ...' % (names[seats[0]], names[seats[1]]))
-                result = play_game(options, players[seats[0]][0], players[seats[1]][0], players[seats[0]][1], players[seats[1]][1])
-                logging.info('%s beat %s.' % (names[seats[result]], names[seats[1 - result]]))
-                wins[seats[result]] += 1
-                logging.info('BOTFIGHTS\t%s' % ('\t'.join(map(lambda x: '%s:%d' % (names[x], wins[x]), wins.keys()))))
-    a = []
-    for i in wins.items():
-        a.append((names[i[0]], i[1]))
-    a.sort(key = lambda x: x[1], reverse = True)
-    return a
+    g.table.append(play)
+    for i in range(len(g.hands[g.whose_move])):
+        if g.hands[g.whose_move][i] == play[0]:
+            g.hands[g.whose_move] = g.hands[g.whose_move][:i] + g.hands[g.whose_move][i+1:]
+            break
+    count = get_count(get_ends(g.table))
+    if (0 < count) and (0 == count % 5):
+        g.scores[g.whose_move % 2] += (count // 5)
+    if 0 == len(g.hands[g.whose_move]):
+        if g.whose_move in (0, 2):
+            player_points = (1, 3)
+            scorer = 0
+        else:
+            player_points = (0, 2)
+            scorer = 1
+        points = sum(map(lambda x: x[0] + x[1], g.hands[player_points[0]])) + \
+                 sum(map(lambda x: x[0] + x[1], g.hands[player_points[1]]))
+        g.scores[scorer] += points // 5
+        return True
+    return False
 
 
-def main(argv):
-    if 0 == len(argv):
-        print HELP
-        sys.exit()
+def play_game(options, player_north, player_east, player_south, player_west):
+    g = new_game(options, player_north, player_east, player_south, player_west)
+    while 1:
+        if g.scores[0] >= PLAY_TO:
+            return 0
+        if g.scores[1] >= PLAY_TO:
+            return 1
+        new_hand(g)
+        play_hand(g)
+        g.whose_set += 1
+        if 4 == g.whose_set:
+            g.whose_set = 0
 
-    c = argv[0]
-
-    if 0:
-        pass
-
-    elif 'help' == c:
-        print HELP
-        sys.exit()
-
-    elif 'human' == c:
-        logging.basicConfig(level=logging.INFO, format='%(message)s', stream=sys.stdout)
-        options = {}
-        player_names = ('p_human', 'p_random')
-        seed = int(time.time() * 1000)
-        play_games(options, player_names, seed, 1)
-
-    elif 'game' == c:
-        logging.basicConfig(level=logging.DEBUG, format='%(message)s', stream=sys.stdout)
-        options = {}
-        player_names = argv[1:]
-        seed = int(time.time() * 1000)
-        play_games(options, player_names, seed, 1)
-
-    elif 'tournament' == c:
-        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)-7s %(message)s', stream=sys.stdout)
-        n = int(argv[1])
-        player_names = argv[2:]
-        seed = ''.join(argv)
-        options = {}
-        play_games(options, player_names, seed, n)
-
-    else :
-        logging.error('i don\'t know how to "%s". look at the source' % c)
-        print HELP
-        sys.exit()
-
-
-if __name__ == '__main__':
-    main(sys.argv[1:])
